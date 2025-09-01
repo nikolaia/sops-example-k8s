@@ -1,0 +1,15 @@
+creation_rules:
+  - path_regex: terraform/keys/(flux-gpg-)?private\.asc$
+    format: binary
+    pgp: 4E548DA00E9B10E5470AAA4CD9E872DE8210DCF7 # nikolai@stasj.com (YubiKey)
+  - path_regex: terraform/secrets/.*\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    key_groups:
+      - pgp:
+          - 4E548DA00E9B10E5470AAA4CD9E872DE8210DCF7 # nikolai@stasj.com (YubiKey)
+          - 83E1F3DE6E8F9410481BB665D5CAC29219AA4A78 # fluxcd-sops@example.com
+  - path_regex: gitops/apps/.*/secret\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    pgp: 83E1F3DE6E8F9410481BB665D5CAC29219AA4A78 # fluxcd-sops@example.com
+  - path_regex: \.env$
+    pgp: 4E548DA00E9B10E5470AAA4CD9E872DE8210DCF7 # nikolai@stasj.com (YubiKey)

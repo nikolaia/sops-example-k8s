@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sops-example-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sops-example-app
+  template:
+    metadata:
+      labels:
+        app: sops-example-app
+    spec:
+      containers:
+      - name: app
+        image: sops-example-app:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: MY_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: my-secret
+              key: secret-value
