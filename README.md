@@ -75,6 +75,11 @@ OpenTofu will:
 kubectl --context kind-sops-demo get pods -n flux-system
 kubectl --context kind-sops-demo get kustomizations -A
 kubectl --context kind-sops-demo get secrets my-secret -n default -o yaml
+```
+
+Once the app pod is ready, port-forward its service to expose the decrypted secret on your laptop:
+
+```bash
 kubectl --context kind-sops-demo port-forward svc/sops-example-app 8080:80 &
 curl http://localhost:8080/
 ```
