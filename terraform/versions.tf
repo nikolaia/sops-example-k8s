@@ -10,5 +10,9 @@ terraform {
       source  = "carlpett/sops"
       version = ">= 1.0.0"
     }
+    flux = {
+      source  = "fluxcd/flux"
+      version = ">= 1.0.0"
+    }
   }
 }

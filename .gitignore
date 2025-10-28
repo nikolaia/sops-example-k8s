@@ -3,3 +3,4 @@ terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.*
 apps/sops-example-app/node_modules/
+terraform/secrets/github-pat.yaml

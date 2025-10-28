@@ -1,59 +1,54 @@
-# Repo Purpose & Implementation Plan
+# Agent Handbook
 
-This repository demonstrates multiple workflows for handling encrypted configuration with Mozilla SOPS. It currently contains:
+This repository powers a conference demo showing how SOPS-encrypted secrets flow through FluxCD and OpenTofu on a local Kind cluster. Use this file to understand the moving pieces before making changes.
 
-- `apps/sops-example-app/` – The Node.js demo application (Dockerfile, app, package.json).
-- `gitops/apps/sops-example-app/` – Kubernetes manifests (secret/deployment/service) plus a kustomization Flux reconciles.
-- `gitops/clusters/kind-sops-demo/` – Cluster composition that pulls in the app via Flux.
-- `gitops/keys/public-key.asc` – Legacy SOPS public key for local experiments.
-- `terraform/` – Infrastructure-as-code that bootstraps Flux, decrypts the Flux private key secret, and configures Git reconciliation.
+## Current Architecture
 
-The current vision is a turnkey local demo that highlights how Terraform, FluxCD, and SOPS cooperate to run an app whose secrets never live unencrypted on disk.
+- `apps/sops-example-app/` – Simple Node.js service (`app.js`, `Dockerfile`, `package.json`) that prints the decrypted secret.
+- `gitops/apps/sops-example-app/` – Kustomize bundle (`deployment.yaml`, `service.yaml`, `secret.yaml`, `kustomization.yaml`). `secret.yaml` is SOPS-encrypted for the Flux key only.
+- `gitops/clusters/kind-sops-demo/` – Cluster composition. The top-level kustomization references the `flux-system/` subfolder which in turn installs the Flux-managed `Kustomization` for the app.
+- `terraform/` – OpenTofu configuration (folder name kept for familiarity). It installs Flux via the Flux provider, decrypts the SOPS GPG private key into `flux-system/sops-gpg`, loads a GitHub PAT from SOPS, and bootstraps the cluster against this Git repo (`https://github.com/nikolaia/sops-example-k8s.git` by default).
+- `.sops.yaml` – Routing rules: Flux private key files encrypt for the presenter's YubiKey; Flux secret manifests for both presenter + Flux; app secrets for Flux only.
 
-## Demo Vision
+## Demo Flow (see root `README.md` for exact commands)
 
-1. A local Kubernetes cluster (Kind by default) runs the sample application defined in `gitops/apps/sops-example-app/`.
-2. FluxCD is installed to reconcile application manifests from this repository.
-3. Terraform provisions Flux, primes it with a SOPS decryption key, and leaves Flux to manage the rest of the manifests.
-4. All sensitive data—including the Flux GPG private key—is stored in-repo encrypted with SOPS, never in plain text.
+1. Import the Flux public key and confirm YubiKey access; decrypt the stored private key once to verify.
+2. Build the app image and load it into the Kind cluster (`kind load docker-image`).
+3. Run `tofu init && tofu apply` inside `terraform/`. This:
+   - Uses the Flux provider to install Flux controllers with embedded manifests.
+   - Loads the GitHub PAT from `terraform/secrets/github-pat.yaml` (SOPS) for push access.
+   - Commits bootstrap manifests (GitRepository + Kustomization) to `gitops/clusters/kind-sops-demo`.
+   - Writes the decrypted Flux SOPS key to `flux-system/sops-gpg`.
+4. Verify pods, kustomizations, and the decrypted secret via `kubectl`; port-forward the service for the HTTP demo.
+5. Clean up with `tofu destroy` and `kind delete cluster --name sops-demo`.
 
-## Planned Work Breakdown
+## Key Material
 
-### 1. Local Cluster & Terraform Bootstrap
+- Flux public key: `terraform/keys/flux-gpg-public.asc` (plain text).
+- Flux private key: `terraform/keys/flux-gpg-private.asc` (SOPS-encrypted, committed).
+- Presenter YubiKey fingerprint: `4E548DA00E9B10E5470AAA4CD9E872DE8210DCF7`.
+- Flux GPG fingerprint: `83E1F3DE6E8F9410481BB665D5CAC29219AA4A78`.
 
-- ✅ Terraform assumes a Kind context (configurable) and installs Flux via `flux install`.
-- ✅ `flux-system` namespace and SOPS secret are provisioned from an encrypted manifest.
-- ☐ Consider packaging optional targets (e.g., Makefile) for quick demo reset.
+## Development Notes
 
-### 2. SOPS-Encrypted Flux Key Handling
+- Use `tofu` instead of `terraform`; all docs assume OpenTofu 1.6+.
+- Secrets must be re-keyed with `sops updatekeys` if fingerprints change.
+- App manifests reside exclusively under `gitops/`; adjust Flux paths accordingly.
+- The app image tag `sops-example-app:latest` is referenced by the deployment; keep it in sync with local builds.
+- Flux provider requires the locally-encrypted PAT in `terraform/secrets/github-pat.yaml` (template: `github-pat.yaml.example`) to push bootstrap commits; the file is `.gitignore`d so nothing sensitive (even encrypted) lands in the public repo, reducing “harvest now, decrypt later” risk.
 
-- ✅ Flux key pair committed under `terraform/keys/`.
-- ✅ Private key encrypted in-place with SOPS; secret manifest encrypted for Flux + operator.
-- ✅ `.sops.yaml` routes:
-  - Flux private key → presenter’s YubiKey fingerprint only.
-  - Flux secret manifest → both presenter + Flux recipients.
-  - App manifests (`gitops/apps/.../secret.yaml`) → Flux recipient only.
-- ☐ Decide whether to keep a decrypted backup of the Flux private key outside the repo.
+## Open Items & Ideas
 
-### 3. Flux Configuration
+- Add convenience scripts or a `Makefile` for one-command bootstrap/destroy.
+- Decide whether to maintain an offline copy of the Flux private key outside the repo.
+- Consider adding health checks/alerts or a second app to showcase broader GitOps scenarios.
+- Optional validation steps (e.g., `tofu validate`, `flux check`) could be scripted to streamline rehearsals.
 
-- ✅ Terraform can create GitRepository/Kustomization with SOPS decryption enabled.
-- ✅ Defaults point Flux at `https://github.com/nikolaia/sops-example-k8s.git`.
-- ☐ Consider Flux health checks or notifications for live UX.
+## Troubleshooting
 
-### 4. Demo Documentation & Tooling
-
-- ✅ Root `README.md` documents the bootstrap flow end-to-end.
-- ☐ Prepare presenter notes (timings, commands, expected outputs) for the stage run.
-
-### 5. Stretch Ideas (time permitting)
-
-- Show how Flux could watch another Git branch to highlight GitOps flows.
-- Add a second environment or namespace managed by Flux to demonstrate multi-environment secrets.
-- Provide automated tests or checks (e.g., `terraform validate`, `flux --kubeconfig ...`) to verify everything before the talk.
-
-## Open Questions
-
-- Should the Flux GitRepository in Terraform default to this repo, or be left configurable only?
-- Do we want scripted image build/push + Kind image load to ensure the deployment comes up live?
-- Is there value in demonstrating Flux multi-recipient secrets (e.g., team vs. robot keys) within the demo?
+- **Flux namespace stuck terminating** – When tearing down the cluster without Flux controllers running, `GitRepository` and `Kustomization` resources may keep `finalizers.fluxcd.io`, leaving the `flux-system` namespace in the `Terminating` phase. You can run `scripts/finalizers.sh` (defaults to the `flux-system` resources) or create a temporary `ServiceAccount` with `cluster-admin`, run a one-off job (e.g. `bitnami/kubectl:latest`) that executes  
+  ```sh
+  kubectl patch gitrepositories.source.toolkit.fluxcd.io flux-system -n flux-system --type=json -p='[{"op":"remove","path":"/metadata/finalizers"}]'
+  kubectl patch kustomizations.kustomize.toolkit.fluxcd.io flux-system -n flux-system --type=json -p='[{"op":"remove","path":"/metadata/finalizers"}]'
+  ```  
+  and then delete the helper RBAC/job resources. Once both CRs disappear, the namespace finishes terminating.

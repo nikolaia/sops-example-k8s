@@ -3,7 +3,6 @@ kind: Kustomization
 resources:
   - gotk-components.yaml
   - gotk-sync.yaml
-  - app-kustomization.yaml
 patches:
   - patch: |
       apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -12,13 +11,13 @@ patches:
         name: flux-system
         namespace: flux-system
       spec:
-        interval: 1m0s
-        path: gitops/clusters/kind-sops-demo
-        prune: true
+        interval: ${interval}
+        path: ${path}
+        prune: ${prune}
         decryption:
           provider: sops
           secretRef:
-            name: sops-gpg
+            name: ${decryption_secret}
     target:
       kind: Kustomization
       name: flux-system

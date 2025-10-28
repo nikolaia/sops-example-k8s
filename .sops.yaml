@@ -1,6 +1,9 @@
 creation_rules:
-  - path_regex: terraform/keys/(flux-gpg-)?private\.asc$
+  - path_regex: terraform/keys/flux-gpg-private\.asc$
     format: binary
+    pgp: 4E548DA00E9B10E5470AAA4CD9E872DE8210DCF7 # nikolai@stasj.com (YubiKey)
+  - path_regex: terraform/secrets/github-pat.yaml$
+    encrypted_regex: ^(data|stringData|token|username)$
     pgp: 4E548DA00E9B10E5470AAA4CD9E872DE8210DCF7 # nikolai@stasj.com (YubiKey)
   - path_regex: terraform/secrets/.*\.yaml$
     encrypted_regex: ^(data|stringData)$
