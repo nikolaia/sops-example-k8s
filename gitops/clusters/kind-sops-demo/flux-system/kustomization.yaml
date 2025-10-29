@@ -3,7 +3,6 @@ kind: Kustomization
 resources:
   - gotk-components.yaml
   - gotk-sync.yaml
-  - app-kustomization.yaml
 patches:
   - patch: |
       apiVersion: kustomize.toolkit.fluxcd.io/v1
